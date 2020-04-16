@@ -1,8 +1,10 @@
+require('dotenv').config()
 const passport = require('passport')
 const JwtStrategy = require('passport-jwt').Strategy
 const { ExtractJwt } = require('passport-jwt')
 const LocalStrategy = require('passport-local').Strategy
 const GooglePlusTokenStrategy = require('passport-google-plus-token')
+const FacebookTokenStrategy = require('passport-facebook-token')
 const { JWT_SECRET } = require('./configuration/index')
 const User = require('./models/user')
 
@@ -31,8 +33,8 @@ passport.use(new JwtStrategy({
 
 // GOOGLE OAUTH STRATEGY
 passport.use('googleToken', new GooglePlusTokenStrategy({
-  clientID: '906449625052-vmu5huk0brfke9v7d5qnqt4msd950kq0.apps.googleusercontent.com',
-  clientSecret: '53cQumqNBtu34MpkQ-KWyzJq'
+  clientID: process.env.GOOGLE_CLIENT_ID,
+  clientSecret: process.env.GOOGLE_SECRET
 }, async (accessToken, refreshToken, profile, done) => {
   try {
     console.log('accessToken', accessToken)
@@ -49,6 +51,40 @@ passport.use('googleToken', new GooglePlusTokenStrategy({
     const newUser = User({
       method: 'google',
       google: {
+        id: profile.id,
+        email: profile.emails[0].value
+      }
+    })
+
+    await newUser.save()
+    done(null, newUser)
+
+  } catch(error) {
+    done(error, false, error.message)
+  }
+}))
+
+
+// FACEBOOK OAUTH STRATEGY
+passport.use('facebookToken', new FacebookTokenStrategy({
+  clientID: process.env.FACEBOOK_CLIENT_ID,
+  clientSecret: process.env.FACEBOOK_SECRET
+}, async (accessToken, refreshToken, profile, done) => {
+  try {
+    console.log('accessToken', accessToken)
+    console.log('refreshToken', refreshToken)
+    console.log('profile', profile)
+
+    // Check wether this current user exists in our DB
+    const existingUser = await User.findOne({ "facebook.id": profile.id })
+    if (existingUser) {
+      return done(null, existingUser)
+    }
+
+    // If new account
+    const newUser = User({
+      method: 'facebook',
+      facebook: {
         id: profile.id,
         email: profile.emails[0].value
       }
